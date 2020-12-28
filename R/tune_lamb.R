@@ -1,5 +1,6 @@
+#' @export
 
-tune_lamb = function(X, K, seqlamb, initial=TRUE, vec_x=vec_x){
+tune_lamb = function(X, K, seqlamb, initial=TRUE, vec_x=NULL){
   n = length(X)
   p = ncol(vec_x)
   dimen = dim(X[[1]])
@@ -7,7 +8,7 @@ tune_lamb = function(X, K, seqlamb, initial=TRUE, vec_x=vec_x){
   mincrit = 10^8
 
   for (ilambda in 1:length(seqlamb)){
-    obj=DEEM(X, K, lambda=seqlamb[ilambda], initial=TRUE, vec_x=vec_x, niter=50)
+    obj=DEEM(X, K, lambda=seqlamb[ilambda], initial=initial, vec_x=vec_x, niter=50)
     Sigma=kronecker(kronecker(obj$sigma[[3]],obj$sigma[[2]]),obj$sigma[[1]])
     invSigma=ginv(Sigma)
     crit=0

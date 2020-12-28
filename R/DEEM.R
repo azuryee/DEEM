@@ -3,8 +3,8 @@
 #' @useDynLib DEEM, .registration=TRUE
 
 DEEM = function(X, nclass, niter=100, lambda=NULL, dfmax=n, pmax=nvars, pf=rep(1, nvars),
-                               eps=1e-04, maxit=1e+05, sml=1e-06, verbose=FALSE, perturb=NULL, ceps=0.1,
-                               initial=FALSE, vec_x=NULL, utrue, vtrue, mutrue){
+                               eps=1e-04, maxit=1e+05, sml=1e-06, verbose=FALSE, ceps=0.1,
+                               initial=TRUE, vec_x=NULL){
 
   if (is.null(lambda)){
     stop("Parameter lambda")
@@ -338,8 +338,7 @@ DEEM = function(X, nclass, niter=100, lambda=NULL, dfmax=n, pmax=nvars, pf=rep(1
   nzero=nzero/iter
   #output
   y=apply(gamma,1,which.max)
-  outlist=list(pi=espi,mu=mu,sigma=es_sigma,gamma=gamma,y=y,iter=iter,df=nzero,beta=beta,
-               cov_t=cov_t/iter)
+  outlist=list(pi=espi,mu=mu,sigma=es_sigma,gamma=gamma,y=y,iter=iter,df=nzero,beta=beta)
 
 }
 

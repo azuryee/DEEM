@@ -1,10 +1,11 @@
+#' @export
 
-tune_K = function(X, seqK, seqlamb, initial=TRUE, vec_x=vec_x){
+tune_K = function(X, seqK, seqlamb, initial=TRUE, vec_x=NULL){
   minclust = bic = opt_lambs = rep(0,length(seqK))
   a = length(X)*0.05
 
   for (iK in 1:length(seqK)) {
-    res_lamb = tune_lamb(X, seqK[iK], seqlamb=seqlamb, initial=TRUE, vec_x=vec_x)
+    res_lamb = tune_lamb(X, seqK[iK], seqlamb=seqlamb, initial=initial, vec_x=vec_x)
     bic[iK] = res_lamb$opt_bic
     opt_lambs[iK] = res_lamb$opt_lamb
 

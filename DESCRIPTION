@@ -8,11 +8,17 @@ Author: Qing Mai <mai@stat.fsu.edu>,
 	      Kai Deng <kd18h@stat.fsu.edu>
 Maintainer: Kai Deng <kd18h@stat.fsu.edu>
 Description: This is an R package for implementing the doubly-enhanced EM-algorithm (DEEM) for tensor clustering.
-License: What license is it under?
+License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.1.1
 LinkingTo: 
     Rcpp
 Imports: 
-    Rcpp
+    Rcpp,
+    MASS,
+    tensr,
+    abind,
+    TRES,
+    rTensor,
+    combinat

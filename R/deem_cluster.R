@@ -1,0 +1,361 @@
+#' Generate simulation parameters
+#'
+#' @param X aa
+#' @param nclass aa
+#' @param niter aa
+#' @param lambda aa
+#' @param dfmax aa
+#' @param pmax aa
+#' @param pf aa
+#' @param eps aa
+#' @param maxit aa
+#' @param sml aa
+#' @param verbose aa
+#' @param perturb aa
+#' @param ceps aa
+#' @param initial aa
+#' @param vec_x aa
+#' @param utrue aa
+#' @param vtrue aa
+#' @param mutrue aa
+#' 
+#'
+#' @return List of parameters
+#' @export
+#' @import MASS tensr
+#' @useDynLib DEEM, .registration=TRUE
+#' @examples 
+#' A = array(rnorm(24),dim=c(2,3,4))
+
+
+deem_cluster = function(X, nclass, niter=100, lambda=NULL, dfmax=n, pmax=nvars, pf=rep(1, nvars),
+                               eps=1e-04, maxit=1e+05, sml=1e-06, verbose=FALSE, perturb=NULL, ceps=0.1,
+                               initial=FALSE, vec_x=NULL, utrue, vtrue, mutrue){
+  
+  if (is.null(lambda)){
+    stop("Parameter lambda")
+  }
+  
+  n = length(X)
+  dimen = dim(X[[1]])
+  M = length(dimen)
+  nvars = prod(dimen)
+  
+  if (is.null(vec_x)){
+    vec_x = matrix(0, prod(dimen), n) #n*p eventually
+    for (i in 1:n){
+      vec_x[,i] = matrix(X[[i]], ncol=1)
+    }
+    vec_x = t(vec_x)
+  }
+  
+
+  #initialize
+  if (initial==TRUE) {
+    obj=kmeans(vec_x,nclass)
+    y=obj$cluster
+    mu=array(list(),nclass)
+    for (i in 1:nclass) {
+      mu[[i]] = array(0,dim=dimen)
+    }
+    for (i in 1:n) {
+      mu[[y[i]]] = mu[[y[i]]]+X[[i]]
+    }
+    for (i in 1:nclass) {
+      mu[[i]] = mu[[i]]/sum(y==i)
+    }
+    
+  }else{
+    #initialize mean
+  
+    mu=array(list(),nclass)
+    idx=sample(n,nclass,replace=FALSE)
+    
+    for (i in 1:nclass){
+      mu[[i]] = X[[idx[i]]]
+    }
+    
+    #calculate distance and assign class
+    dist = matrix(0,n,nclass)
+    for (i in 1:n) {
+      for (j in 1:nclass) {
+        dist[i,j]=tnorm(X[[i]]-mu[[j]])
+      }
+    }
+    y=apply(dist,1,which.min)
+  }
+  
+  espi=rep(0,nclass)
+  for (i in 1:nclass){
+    espi[i]=sum(y==i)/n
+  }
+  
+  
+  
+  #initialize covariance
+  matmu=matrix(list(),nclass,1)
+  es_sigma=array(list(),M)
+  invsigma=array(list(),M)
+  for (i in 1:M){
+    es_sigma[[i]]=diag(dimen[i])
+    invsigma[[i]]=ginv(es_sigma[[i]])
+  }
+  
+  for (icov in 1:1){
+    old_invsigma=invsigma
+    es_sigma=array(list(),M)
+    for (m in 1:M){
+      invsigmam=array(list(), M)
+      es_sigma[[m]]=matrix(0, dimen[m], dimen[m])
+      for (i in 1:M){
+        if (i!=m){
+          invsigmam[[i]]=old_invsigma[[i]]
+        }else{
+          invsigmam[[i]]=diag(dimen[i])
+        }
+      }
+      varscale=0
+      for (i in 1:n){
+        standx=X[[i]]-mu[[y[i]]]
+        w=atrans(standx, invsigmam)
+        es_sigma[[m]]=es_sigma[[m]]+mat(w, m)%*%t(mat(standx,m))
+        varscale=varscale+(standx[1])^2
+      }
+      varscale=varscale/n
+      es_sigma[[m]]=es_sigma[[m]]/(n*nvars/dimen[m])
+      #		if (m!=1){
+      #			es_sigma[[m]]=es_sigma[[m]]*dimen[m]/sum(diag(es_sigma[[m]]))
+      #		}
+      if (m!=1){
+        es_sigma[[m]]=es_sigma[[m]]/es_sigma[[m]][1,1]
+      }else{
+        es_sigma[[1]]=es_sigma[[1]]/es_sigma[[1]][1,1]*varscale
+      }
+      invsigma[[m]]=ginv(es_sigma[[m]])
+    }
+  }
+  
+
+  
+  
+  
+  #pre for Fortran
+  nk=as.integer(nclass-1)
+  dfmax=n
+  pmax=nvars
+  nvars=as.integer(nvars)
+  pf=rep(1,nvars)
+  eps=1e-04
+  maxit=1e+05
+  sml=1e-06
+  ulam=lambda
+  nlam=as.integer(1)
+  pf <- as.double(pf)
+  if (length(pf) != nvars) 
+    stop("The size of penalty factor must be same as the number of input variables")
+  dfmax=as.integer(dfmax*nk)
+  pmax <- as.integer(pmax)
+  flmin <- as.double(1)
+  eps <- as.double(eps)
+  maxit <- as.integer(maxit)
+  verbose <- as.integer(FALSE)
+  sml <- as.double(sml)
+  ldim=as.integer(M)
+  maxd=max(dimen)
+  nzero = 0
+  cov_t = 0
+  
+  #loop
+  for (iter in 1:niter){
+    
+    muold=mu
+    yold=y
+    
+    #E step
+    
+    #estimate beta
+    delta=matrix(0,nclass-1,nvars)
+    for (k in 1:(nclass-1)){
+      delta[k,]=matrix((mu[[k+1]]-mu[[1]]),nrow=1)
+    }
+    sigma=matrix(0,M,maxd*maxd)
+    for (i in 1:M){
+      tmp<-matrix(0, maxd, maxd)
+      tmp[1:dimen[i], 1:dimen[i]]=es_sigma[[i]]
+      sigma[i,]=as.vector(tmp)
+    }
+    
+    fit <- .Fortran("clustertensor", obj = double(nlam), nk, nvars, ldim, dimen,maxd,as.double(sigma), as.double(delta), 
+                    as.double(pf), dfmax, pmax, nlam, flmin, ulam, eps, maxit, sml, verbose, nalam = integer(1), 
+                    theta = double(pmax * nk * nlam), itheta = integer(pmax), ntheta = integer(nlam), 
+                    alam = double(nlam), npass = integer(1), jerr = integer(1))
+    beta = matrix(fit$theta, pmax, nk, byrow = TRUE)
+    
+    nzero = length(which(beta[,1]!=0)/(nclass-1)) + nzero    
+    
+    
+    
+    #estimate gamma, new epsilon
+    
+    #    gamma=matrix(0,n,nclass)
+    #    gamma.ratio=matrix(0,n,nclass-1)
+    #    for (i in 1:n){
+    #      for (k in 1:(nclass-1)){
+    #        tmp=sum(as.vector(X[[i]]-(mu[[k+1]]+mu[[1]])/2)*beta[,k])
+    #        gamma.ratio[i,k]=min(max(espi[k+1]/espi[1]*exp(tmp),1e-10),1e+10)
+    #      }
+    #    } 
+    #    gamma[,1]=matrix(1/(apply(gamma.ratio,1,sum)+1),ncol=1)
+    #    for (k in 1:(nclass-1)){
+    #      gamma[,k+1]=gamma.ratio[,k]*gamma[,1]
+    #    }
+    
+    #new
+    gamma = matrix(0, n, nclass)
+    vec_mu = matrix(0, prod(dimen), nclass) #nclass*p eventually
+    for (i in 1:nclass){
+      vec_mu[,i] = matrix(mu[[i]], ncol=1)
+    }
+    vec_mu = t(vec_mu)
+    
+    inexpterm = matrix(0,n,nclass)
+    for (k in 2:nclass){
+      tmp = 0.5*(vec_mu[k,]+vec_mu[1,])
+      for (i in 1:n){
+        inexpterm[i, k] = (matrix(vec_x[i,],nrow=1)-matrix(tmp,nrow=1)) %*% matrix(beta[,k-1],ncol=1)
+      }
+    } 
+    expterm = exp(inexpterm)
+
+    
+    for (i in 1:n){
+      den = espi[1]+sum(expterm[i, 2:nclass]*espi[2:nclass])
+      gamma[i,1] = espi[1]/den
+      for (k in 2:nclass){
+        gamma[i,k] = espi[k]*expterm[i,k]/den
+      }
+    }
+    
+    
+    #M step
+    
+    #update mu
+    mu=array(list(),nclass)
+    for (k in 1:nclass){
+      mu[[k]]=array(0, dim=dimen)
+      for (i in 1:n){
+        mu[[k]]=mu[[k]]+gamma[i,k]*X[[i]]
+      }
+      mu[[k]]=mu[[k]]/apply(gamma,2,sum)[k]
+    }
+    
+    
+    
+    #update covariance es_sigma
+    #    for (i in 1:M){
+    #	invsigma[[i]]=diag(dimen[i])
+    #    }
+    #    for (icov in 1:1){
+    #    	old_invsigma=invsigma
+    #	es_sigma=array(list(),M)
+    #	for (m in 1:M){
+    #		invsigmam=array(list(), M)
+    #		es_sigma[[m]]=matrix(0, dimen[m], dimen[m])
+    #		for (i in 1:M){
+    #			if (i!=m){
+    #				invsigmam[[i]]=old_invsigma[[i]]
+    #			}else{
+    #				invsigmam[[i]]=diag(dimen[i])
+    #			}
+    #		}
+    #		varscale=0
+    #		for (i in 1:n){
+    #			for (k in 1:nclass){
+    #				standx=X[[i]]-mu[[k]]
+    #				w=atrans(standx, invsigmam)
+    #				es_sigma[[m]]=es_sigma[[m]]+gamma[i,k]*mat(w, m)%*%t(mat(w,m))
+    #				varscale=varscale+gamma[i,k]*standx[1]*standx[1]
+    #			}
+    #		}
+    #		varscale=varscale/n
+    #		es_sigma[[m]]=es_sigma[[m]]/(n*nvars/dimen[m])
+    #	        if (m!=1){
+    #			es_sigma[[m]]=es_sigma[[m]]/es_sigma[[m]][1,1]
+    #  	    	}else{	
+    #  	    		es_sigma[[1]]=es_sigma[[1]]/es_sigma[[1]][1,1]*varscale
+    #		}
+    #		invsigma[[m]]=ginv(es_sigma[[m]])
+    #	}
+    #    }
+    
+    #new update covariance
+    
+    t1 = Sys.time()
+    for (m in 1:M){
+      es_sigma[[m]] = matrix(0, dimen[m], dimen[m])
+      for (i in 1:n){
+        for (k in 1:nclass){
+          standx = X[[i]]-mu[[k]]
+          es_sigma[[m]] = es_sigma[[m]] + gamma[i,k]*mat(standx, m)%*%t(mat(standx, m))
+        }
+      }
+      es_sigma[[m]] = es_sigma[[m]]/(n*prod(dimen)/dimen[m])
+    }
+    
+    scale1 = 0
+    for (i in 1:n){
+      for (k in 1:nclass){
+        scale1 = scale1 + gamma[i,k]*(X[[i]][1]-mu[[k]][1])^2
+      }
+    }
+    scale1 = scale1/(n*es_sigma[[1]][1])
+    es_sigma[[1]] = scale1*es_sigma[[1]]
+    for (m in 2:M){
+      scale=es_sigma[[m]][1]
+      es_sigma[[m]]=es_sigma[[m]]/scale
+    }    
+    cov_t = cov_t + difftime(Sys.time(), t1, units="secs")
+    
+    #update pi
+    espi=apply(gamma,2,sum)/n
+    #check convergence
+    s=0
+    for(i in 1:nclass){
+      s=s+tnorm(mu[[i]]-muold[[i]])
+    }
+    
+    if (s<ceps) break
+    
+    
+    #q function
+    #  qfunc=0
+    #  for (i in 1:n){
+    #    for (j in 1:nclass){
+    #      qfunc=qfunc+gamma[i,j]*(-0.5*sum(diag(ginv(v)%*%t(X[[i]]-mu[[j]])%*%ginv(u)%*%(X[[i]]-mu[[j]])))-0.5*p*log(det(v))-0.5*q*log(det(u)))
+    #    }
+    #  }
+    # print(qfunc)
+    
+    #loglikelihood
+    #    l=0
+    #    for (i in 1:n){
+    #      tmp=0
+    #      for (j in 1:nclass){
+    #        tmp=tmp+(exp(-0.5*sum(diag(vinv%*%t(X[[i]]-mu[[j]])%*%uinv%*%(X[[i]]-mu[[j]]))))/((2*pi)^(p*q/2)*det(v)^(p/2)*det(u)^(q/2)))
+    #        l=l+tmp
+    #      }
+    #      l=l+log(tmp)
+    #    }
+    #    print(l)    
+    
+  }
+  
+  
+  nzero=nzero/iter
+  #output
+  y=apply(gamma,1,which.max)
+  outlist=list(pi=espi,mu=mu,sigma=es_sigma,gamma=gamma,y=y,iter=iter,df=nzero,beta=beta,
+               cov_t=cov_t/iter)
+  
+}
+

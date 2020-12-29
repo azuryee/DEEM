@@ -26,11 +26,11 @@ cluster_err = function(K, idx, id_est) {
   # id_est is the estimate label
   # idx is the true label
   # return error rate
-  
+
   perK = combinat::permn(K)
-  
+
   n = length(idx)
-  
+
   K_pred = perK[[1]]
   id_pred = K_pred[id_est]
   for(t in 2:length(perK)) {
@@ -41,19 +41,19 @@ cluster_err = function(K, idx, id_est) {
       id_pred = id_now
     }
   }
-  
+
   id_err = sum(id_pred!=idx)/n*100
-  
+
   return(list(cluster_err=id_err, K_pred=K_pred, id_pred=id_pred))
 }
 
 
 mkronecker = function(X){
   #X is a list of matrix to do kronecker product
-  
+
   M = length(X)
   KronX = X[[M]]
-  
+
   if(M!=1){
     for(m in (M-1):1){
       KronX = kronecker(KronX,X[[m]])
@@ -63,6 +63,24 @@ mkronecker = function(X){
 }
 
 
+logMixTenGau = function(Xm, pi, eta, Mu, SIG){
+  #calculate observed loglikelihood
+  #Xm is observed tensor data
+  #pi is estimate weight
+  #eta is estimate probability of Xi belong to class k
+  #Mu is a list of estimate cluster mean, of length K
+  #SIG is a list of estimate covariance matrices, of length M
+
+  n = ncol(Xm)
+  K = length(Mu)
+  sigma = mkronecker(SIG)
+
+  loglk1 = mvtnorm::dmvnorm(t(Xm), mean=as.vector(Mu[[1]]), sigma=sigma, log=TRUE)
+
+  loglk = -sum(log(eta[,1])) + n*log(pi[1]) + sum(loglk1)
+  return(loglk)
+}
+
 
 distortion <- function(x, y, K){
   n=length(y)
@@ -71,7 +89,7 @@ distortion <- function(x, y, K){
     muall=muall+x[[i]]
   }
   muall=muall/n
-  
+
   mu=array(list(),K)
   n.fit=rep(0,K)
   for (i in 1:K){
@@ -89,8 +107,8 @@ distortion <- function(x, y, K){
   SSw=0
   for (i in 1:n){
     SSw=SSw+tnorm(x[[i]]-mu[[y[i]]])
-  }	
+  }
   SSb=SSb-SSw
   dist=SSw/SSb
-  
+
 }

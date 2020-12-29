@@ -3,9 +3,9 @@ Type: Package
 Title: Doubly-enhanced EM-algorithm (DEEM) for tensor clustering
 Version: 0.1.0
 Author: Kai Deng <kd18h@stat.fsu.edu>,
-	    Yuqing Pan <yuqing.pan@stat.fsu.edu>,
-	    Xin Zhang <henry@stat.fsu.edu>,
-	    Qing Mai <mai@stat.fsu.edu>
+        Yuqing Pan <yuqing.pan@stat.fsu.edu>,
+        Xin Zhang <henry@stat.fsu.edu>,
+        Qing Mai <mai@stat.fsu.edu>
 Maintainer: Kai Deng <kd18h@stat.fsu.edu>
 Description: This is an R package for implementing the doubly-enhanced EM-algorithm (DEEM) for tensor clustering.
 License: MIT + file LICENSE

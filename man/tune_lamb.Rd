@@ -27,7 +27,7 @@ tune_lamb(X, K, seqlamb, initial = TRUE, vec_x = NULL)
 
 \references{Mai, Q., Zhang, X., Pan, Y. and Deng, K. (2020) \emph{A Doubly-Enhanced EM Algorithm for Model-Based Tensor Clustering, Manuscript.}}
 
-\author{Qing Mai, Xin Zhang, Yuqing Pan, Kai Deng}
+\author{Kai Deng, Yuqing Pan, Xin Zhang and Qing Mai}
 
 
 

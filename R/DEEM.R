@@ -3,8 +3,8 @@
 #' @useDynLib DEEM, .registration  =  TRUE
 
 DEEM = function(X, nclass, niter = 100, lambda = NULL, dfmax = n, pmax = nvars, pf = rep(1, nvars),
-                               eps = 1e-04, maxit = 1e+05, sml = 1e-06, verbose = FALSE, ceps = 0.1,
-                               initial = TRUE, vec_x = NULL){
+                eps = 1e-04, maxit = 1e+05, sml = 1e-06, verbose = FALSE, ceps = 0.1,
+                initial = TRUE, vec_x = NULL){
 
   if (is.null(lambda)){
     stop("Parameter lambda")
@@ -25,7 +25,7 @@ DEEM = function(X, nclass, niter = 100, lambda = NULL, dfmax = n, pmax = nvars, 
   cov_temp = list(array(),M)
   for (m in 1:M) {
     dim_m = (1:M)[-m]
-    cov_temp[[m]] = ttt(rTensor::as.tensor(X_T), rTensor::as.tensor(X_T), c(dim_m,M + 1))@data
+    cov_temp[[m]] = ttt(rTensor::as.tensor(X_T), rTensor::as.tensor(X_T), c(dim_m,M+1))@data
   }
 
 
@@ -146,7 +146,9 @@ DEEM = function(X, nclass, niter = 100, lambda = NULL, dfmax = n, pmax = nvars, 
     muold = mu
     yold = y
 
-    #E step
+    ##############
+    ### E-step ###
+    ##############
 
     #estimate beta
     delta = matrix(0,nclass-1,nvars)
@@ -169,23 +171,6 @@ DEEM = function(X, nclass, niter = 100, lambda = NULL, dfmax = n, pmax = nvars, 
     nzero = length(which(beta[,1]!=0)/(nclass-1)) + nzero
 
 
-
-    #estimate gamma, new epsilon
-
-    #    gamma = matrix(0,n,nclass)
-    #    gamma.ratio = matrix(0,n,nclass - 1)
-    #    for (i in 1:n){
-    #      for (k in 1:(nclass - 1)){
-    #        tmp = sum(as.vector(X[[i]] - (mu[[k + 1]] + mu[[1]])/2)*beta[,k])
-    #        gamma.ratio[i,k] = min(max(espi[k + 1]/espi[1]*exp(tmp),1e - 10),1e + 10)
-    #      }
-    #    }
-    #    gamma[,1] = matrix(1/(apply(gamma.ratio,1,sum) + 1),ncol = 1)
-    #    for (k in 1:(nclass - 1)){
-    #      gamma[,k + 1] = gamma.ratio[,k]*gamma[,1]
-    #    }
-
-    #new
     gamma = matrix(0, n, nclass)
     vec_mu = sapply(mu,as.vector)
     vec_mu = t(vec_mu)
@@ -210,10 +195,11 @@ DEEM = function(X, nclass, niter = 100, lambda = NULL, dfmax = n, pmax = nvars, 
     #update pi
     espi = apply(gamma,2,sum)/n
 
+    ##############
+    ### M-step ###
+    ##############
 
-    #M step
-
-    #update mu
+    #Mean update
     mu = array(list(),nclass)
     for (k in 1:nclass){
       mu[[k]] = array(0, dim=dimen)
@@ -225,45 +211,7 @@ DEEM = function(X, nclass, niter = 100, lambda = NULL, dfmax = n, pmax = nvars, 
 
 
 
-    #update covariance es_sigma
-    #    for (i in 1:M){
-    #	invsigma[[i]] = diag(dimen[i])
-    #    }
-    #    for (icov in 1:1){
-    #    	old_invsigma = invsigma
-    #	es_sigma = array(list(),M)
-    #	for (m in 1:M){
-    #		invsigmam = array(list(), M)
-    #		es_sigma[[m]] = matrix(0, dimen[m], dimen[m])
-    #		for (i in 1:M){
-    #			if (i! = m){
-    #				invsigmam[[i]] = old_invsigma[[i]]
-    #			}else{
-    #				invsigmam[[i]] = diag(dimen[i])
-    #			}
-    #		}
-    #		varscale = 0
-    #		for (i in 1:n){
-    #			for (k in 1:nclass){
-    #				standx = X[[i]] - mu[[k]]
-    #				w = atrans(standx, invsigmam)
-    #				es_sigma[[m]] = es_sigma[[m]] + gamma[i,k]*mat(w, m)%*%t(mat(w,m))
-    #				varscale = varscale + gamma[i,k]*standx[1]*standx[1]
-    #			}
-    #		}
-    #		varscale = varscale/n
-    #		es_sigma[[m]] = es_sigma[[m]]/(n*nvars/dimen[m])
-    #	        if (m! = 1){
-    #			es_sigma[[m]] = es_sigma[[m]]/es_sigma[[m]][1,1]
-    #  	    	}else{
-    #  	    		es_sigma[[1]] = es_sigma[[1]]/es_sigma[[1]][1,1]*varscale
-    #		}
-    #		invsigma[[m]] = ginv(es_sigma[[m]])
-    #	}
-    #    }
-
-    #new update covariance
-
+    #Covariance update
     t1 = Sys.time()
     for (m in 1:M){
       es_sigma[[m]] = matrix(0, dimen[m], dimen[m])
@@ -296,29 +244,6 @@ DEEM = function(X, nclass, niter = 100, lambda = NULL, dfmax = n, pmax = nvars, 
     }
 
     if (s<ceps) break
-
-
-    #q function
-    #  qfunc = 0
-    #  for (i in 1:n){
-    #    for (j in 1:nclass){
-    #      qfunc = qfunc + gamma[i,j]*( - 0.5*sum(diag(ginv(v)%*%t(X[[i]] - mu[[j]])%*%ginv(u)%*%(X[[i]] - mu[[j]]))) - 0.5*p*log(det(v)) - 0.5*q*log(det(u)))
-    #    }
-    #  }
-    # print(qfunc)
-
-    #loglikelihood
-    #    l = 0
-    #    for (i in 1:n){
-    #      tmp = 0
-    #      for (j in 1:nclass){
-    #        tmp = tmp + (exp( - 0.5*sum(diag(vinv%*%t(X[[i]] - mu[[j]])%*%uinv%*%(X[[i]] - mu[[j]]))))/((2*pi)^(p*q/2)*det(v)^(p/2)*det(u)^(q/2)))
-    #        l = l + tmp
-    #      }
-    #      l = l + log(tmp)
-    #    }
-    #    print(l)
-
   }
 
 
@@ -327,6 +252,6 @@ DEEM = function(X, nclass, niter = 100, lambda = NULL, dfmax = n, pmax = nvars, 
   y = apply(gamma,1,which.max)
   outlist = list(pi=espi, mu=mu, sigma=es_sigma, gamma=gamma,
                  y=y, iter=iter, df=nzero, beta=beta)
-
 }
+
 
